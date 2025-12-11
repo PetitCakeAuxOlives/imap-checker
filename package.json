@@ -2,16 +2,13 @@
   "name": "imap-checker",
   "version": "1.0.0",
   "type": "module",
-  "main": "backend.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node backend.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "imapflow": "^1.0.139"
-  },
-  "engines": {
-    "node": ">=18"
+    "imapflow": "^1.0.0"
   }
 }

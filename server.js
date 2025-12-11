@@ -13,7 +13,16 @@ app.get('/', (req, res) => {
 
 // --- IMAP checker endpoint ---
 app.post('/check', async (req, res) => {
+  console.log('Body reçu:', req.body); // Debug Render
+
   const { host, port, secure, user, password } = req.body;
+
+  if (!host || !port || secure === undefined || !user || !password) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: host, port, secure, user, password',
+    });
+  }
 
   try {
     const client = new ImapFlow({
