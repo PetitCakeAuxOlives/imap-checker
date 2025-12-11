@@ -1,26 +1,16 @@
-import cors from 'cors';
-import express from 'express';
-import { ImapFlow } from 'imapflow';
-
-const app = express();
-app.use(express.json());
-app.use(cors());
-
-// --- Test endpoint ---
-app.get('/', (req, res) => {
-  res.send('IMAP Checker API is running.');
-});
-
-// --- IMAP checker endpoint ---
 app.post('/check', async (req, res) => {
-  console.log('Body reçu:', req.body); // Debug Render
+  console.log('Body reçu:', req.body);
 
-  const { host, port, secure, user, password } = req.body;
+  let { host, port, secure, user, password } = req.body;
 
-  if (!host || !port || secure === undefined || !user || !password) {
+  // Convertir correctement les types
+  port = Number(port);
+  secure = secure === true || secure === 'true';
+
+  if (!host || !port || !user || !password) {
     return res.status(400).json({
       success: false,
-      error: 'Missing required fields: host, port, secure, user, password',
+      error: 'Missing required fields: host, port, user, password',
     });
   }
 
@@ -29,20 +19,17 @@ app.post('/check', async (req, res) => {
       host,
       port,
       secure,
-      auth: {
-        user,
-        pass: password,
-      },
+      auth: { user, pass: password },
     });
 
     await client.connect();
     await client.logout();
 
-    return res.json({ success: true, message: 'IMAP connection successful' });
+    return res.json({ success: true, message: 'IMAP OK' });
   } catch (err) {
-    return res.status(400).json({ success: false, error: err.message });
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
   }
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Server running on port', PORT));
