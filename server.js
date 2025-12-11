@@ -1,12 +1,18 @@
+app.post('/check-test', (req, res) => {
+  console.log('RAW BODY:', req.body);
+  return res.json({ received: req.body });
+});
+
 app.post('/check', async (req, res) => {
   console.log('Body reçu:', req.body);
 
   let { host, port, secure, user, password } = req.body;
 
-  // Convertir correctement les types
+  // Cast correct
   port = Number(port);
   secure = secure === true || secure === 'true';
 
+  // Validation
   if (!host || !port || !user || !password) {
     return res.status(400).json({
       success: false,
