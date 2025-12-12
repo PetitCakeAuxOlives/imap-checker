@@ -1,64 +1,66 @@
 import cors from 'cors';
+import crypto from 'crypto';
 import express from 'express';
-import { ImapFlow } from 'imapflow';
 
 const app = express();
-
-// middlewares
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
-// PORT fourni par Render
+// Récupération clé
+const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex'); // 32 bytes
+const ALGO = 'aes-256-cbc';
+
+// ---- FONCTIONS DE CHIFFREMENT ---- //
+
+function encrypt(text) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGO, KEY, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(text, 'utf8'),
+    cipher.final(),
+  ]);
+  return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
+
+function decrypt(data) {
+  const [ivHex, encryptedHex] = data.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const encrypted = Buffer.from(encryptedHex, 'hex');
+  const decipher = crypto.createDecipheriv(ALGO, KEY, iv);
+  const decrypted = Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final(),
+  ]);
+  return decrypted.toString('utf8');
+}
+
+// ---- ENDPOINTS ---- //
+
+// 1) Chiffrement du mot de passe (utilisé par n8n)
+app.post('/encrypt', (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password manquant' });
+
+  const encrypted = encrypt(password);
+  return res.json({ encrypted });
+});
+
+// 2) Test de déchiffrement (optionnel)
+app.post('/decrypt', (req, res) => {
+  const { encrypted } = req.body;
+  if (!encrypted) return res.status(400).json({ error: 'encrypted manquant' });
+
+  const decrypted = decrypt(encrypted);
+  return res.json({ decrypted });
+});
+
+// 3) Exemple pour utiliser IMAP plus tard
+app.post('/check', (req, res) => {
+  res.json({ status: 'OK backend opérationnel' });
+});
+
+// ---- LANCEMENT ---- //
 const PORT = process.env.PORT || 3000;
-
-// Route debug
-app.post('/check-test', (req, res) => {
-  console.log('RAW BODY:', req.body);
-  return res.json({ received: req.body });
-});
-
-// Route IMAP
-app.post('/check', async (req, res) => {
-  console.log('Body reçu:', req.body);
-
-  let { host, port, secure, user, password } = req.body;
-
-  port = Number(port);
-  secure = secure === true || secure === 'true';
-
-  if (!host || !port || !user || !password) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing required fields: host, port, user, password',
-    });
-  }
-
-  try {
-    const client = new ImapFlow({
-      host,
-      port,
-      secure,
-      auth: { user, pass: password },
-    });
-
-    await client.connect();
-    await client.logout();
-
-    return res.json({ success: true, message: 'IMAP OK' });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
-
-// route par défaut
-app.get('/', (req, res) => {
-  res.send('Serveur Render OK !');
-});
-
-// démarrage serveur
 app.listen(PORT, () => {
-  console.log('Serveur démarré sur le port ' + PORT);
+  console.log('Backend lancé sur port ' + PORT);
 });
