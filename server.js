@@ -1,16 +1,18 @@
 import cors from 'cors';
 import crypto from 'crypto';
 import express from 'express';
+import Imap from 'imap';
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Récupération clé
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex'); // 32 bytes
+// ---- CONFIG CHIFFREMENT ---- //
+
+const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex'); // 32 bytes hex
 const ALGO = 'aes-256-cbc';
 
-// ---- FONCTIONS DE CHIFFREMENT ---- //
+// ---- FONCTIONS ---- //
 
 function encrypt(text) {
   const iv = crypto.randomBytes(16);
@@ -34,9 +36,15 @@ function decrypt(data) {
   return decrypted.toString('utf8');
 }
 
-// ---- ENDPOINTS ---- //
+// ---- ROUTES ---- //
 
-// 1) Chiffrement du mot de passe (utilisé par n8n)
+/**
+ * 1) /encrypt
+ * Body attendu :
+ * {
+ *    "password": "mon_mdp_en_clair"
+ * }
+ */
 app.post('/encrypt', (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Password manquant' });
@@ -45,7 +53,9 @@ app.post('/encrypt', (req, res) => {
   return res.json({ encrypted });
 });
 
-// 2) Test de déchiffrement (optionnel)
+/**
+ * 2) /decrypt
+ */
 app.post('/decrypt', (req, res) => {
   const { encrypted } = req.body;
   if (!encrypted) return res.status(400).json({ error: 'encrypted manquant' });
@@ -54,13 +64,90 @@ app.post('/decrypt', (req, res) => {
   return res.json({ decrypted });
 });
 
-// 3) Exemple pour utiliser IMAP plus tard
-app.post('/check', (req, res) => {
-  res.json({ status: 'OK backend opérationnel' });
+/**
+ * 3) /check
+ * Test IMAP réel
+ *
+ * Body attendu :
+ * {
+ *   "imap_host": "imap.exemple.com",
+ *   "imap_port": 993,
+ *   "imap_user": "email",
+ *   "imap_password": "iv:hex:encrypted"
+ * }
+ */
+app.post('/check', async (req, res) => {
+  const { imap_host, imap_port, imap_user, imap_password } = req.body;
+
+  if (!imap_host || !imap_port || !imap_user || !imap_password) {
+    return res.status(400).json({
+      error: 'Paramètres manquants',
+      details: {
+        imap_host,
+        imap_port,
+        imap_user,
+        imap_password,
+      },
+    });
+  }
+
+  // Déchiffrement du mot de passe
+  let decryptedPassword;
+  try {
+    decryptedPassword = decrypt(imap_password);
+  } catch (e) {
+    return res.status(400).json({
+      error: 'Impossible de déchiffrer le mot de passe',
+      details: e.message,
+    });
+  }
+
+  // Config IMAP
+  const imap = new Imap({
+    user: imap_user,
+    password: decryptedPassword,
+    host: imap_host,
+    port: imap_port,
+    tls: true,
+    tlsOptions: { rejectUnauthorized: false },
+    authTimeout: 10000,
+  });
+
+  // Tentative de connexion
+  try {
+    imap.once('ready', () => {
+      imap.end();
+      return res.json({
+        status: 'success',
+        message: 'Connexion IMAP OK',
+        imap: {
+          host: imap_host,
+          port: imap_port,
+          user: imap_user,
+        },
+      });
+    });
+
+    imap.once('error', (err) => {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Impossible de se connecter à IMAP',
+        technical: err.message,
+      });
+    });
+
+    imap.connect();
+  } catch (err) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erreur interne lors de la tentative IMAP',
+      details: err.message,
+    });
+  }
 });
 
-// ---- LANCEMENT ---- //
+// ---- SERVER ---- //
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log('Backend lancé sur port ' + PORT);
+  console.log('Backend démarré sur le port ' + PORT);
 });
