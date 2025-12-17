@@ -5,9 +5,23 @@ const nodemailer = require('nodemailer');
 const cors = require('cors');
 
 // -------------------------------------
-// CONFIG SERVEUR
+// CONFIG SERVEUR + CORS RENDER FIX
 // -------------------------------------
 const app = express();
+
+// CORS spécial Render / Preflight OPTIONS obligatoire
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 app.use(cors());
 app.use(bodyParser.json());
 
@@ -104,7 +118,7 @@ app.post('/test-imap-smtp', async (req, res) => {
 
 // -------------------------------------
 // ENDPOINT 2 : /check
-// (le tien, celui que n8n va appeler)
+// (celui utilisé par n8n)
 // -------------------------------------
 app.post('/check', async (req, res) => {
   const {
