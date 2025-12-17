@@ -1,15 +1,17 @@
 {
-  "name": "imap-smtp-tester",
+  "name": "imap-smtp-api",
   "version": "1.0.0",
-  "main": "server.js",
+  "description": "API IMAP/SMTP + Proxy N8N pour Render",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
+    "axios": "^1.6.8",
     "body-parser": "^1.20.2",
-    "imap-simple": "^5.0.0",
-    "nodemailer": "^6.9.0"
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "imap-simple": "^5.1.0",
+    "nodemailer": "^6.9.8"
   }
 }

@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const imaps = require('imap-simple');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
+const axios = require('axios'); // <-- obligatoire pour proxy N8N
 
 // -------------------------------------
 // CONFIG SERVEUR + CORS RENDER FIX
@@ -24,6 +25,26 @@ app.use((req, res, next) => {
 
 app.use(cors());
 app.use(bodyParser.json());
+
+// -------------------------------------
+// PROXY N8N (IMPORTANT : FRONTEND -> RENDER -> N8N)
+// -------------------------------------
+app.post('/proxy-n8n', async (req, res) => {
+  try {
+    const response = await axios.post(
+      'https://inovsens.app.n8n.cloud/webhook-test/oauth-handler',
+      req.body,
+      { timeout: 15000 }
+    );
+
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
 
 // -------------------------------------
 // FONCTION : TEST IMAP
@@ -71,7 +92,6 @@ async function testSMTP({ smtp_host, smtp_port, imap_user, imap_password }) {
 
 // -------------------------------------
 // ENDPOINT 1 : /test-imap-smtp
-// (ancien endpoint, fonctionne encore)
 // -------------------------------------
 app.post('/test-imap-smtp', async (req, res) => {
   const {
@@ -117,8 +137,7 @@ app.post('/test-imap-smtp', async (req, res) => {
 });
 
 // -------------------------------------
-// ENDPOINT 2 : /check
-// (celui utilisé par n8n)
+// ENDPOINT 2 : /check (pour N8N)
 // -------------------------------------
 app.post('/check', async (req, res) => {
   const {
@@ -130,7 +149,6 @@ app.post('/check', async (req, res) => {
     imap_password,
   } = req.body;
 
-  // Test IMAP
   const imapResult = await testIMAP({
     imap_host,
     imap_port,
@@ -138,7 +156,6 @@ app.post('/check', async (req, res) => {
     imap_password,
   });
 
-  // Test SMTP
   const smtpResult = await testSMTP({
     smtp_host,
     smtp_port,
