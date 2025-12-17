@@ -56,7 +56,8 @@ async function testSMTP({ smtp_host, smtp_port, imap_user, imap_password }) {
 }
 
 // -------------------------------------
-// ENDPOINT : TEST IMAP + SMTP
+// ENDPOINT 1 : /test-imap-smtp
+// (ancien endpoint, fonctionne encore)
 // -------------------------------------
 app.post('/test-imap-smtp', async (req, res) => {
   const {
@@ -102,7 +103,44 @@ app.post('/test-imap-smtp', async (req, res) => {
 });
 
 // -------------------------------------
-// ENDPOINT DE TEST (OPTIONNEL)
+// ENDPOINT 2 : /check
+// (le tien, celui que n8n va appeler)
+// -------------------------------------
+app.post('/check', async (req, res) => {
+  const {
+    imap_host,
+    imap_port,
+    smtp_host,
+    smtp_port,
+    imap_user,
+    imap_password,
+  } = req.body;
+
+  // Test IMAP
+  const imapResult = await testIMAP({
+    imap_host,
+    imap_port,
+    imap_user,
+    imap_password,
+  });
+
+  // Test SMTP
+  const smtpResult = await testSMTP({
+    smtp_host,
+    smtp_port,
+    imap_user,
+    imap_password,
+  });
+
+  return res.json({
+    success: imapResult.success && smtpResult.success,
+    imap: imapResult,
+    smtp: smtpResult,
+  });
+});
+
+// -------------------------------------
+// ENDPOINT DE TEST
 // -------------------------------------
 app.get('/', (req, res) => {
   res.send('API opérationnelle 🚀');
