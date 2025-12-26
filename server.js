@@ -178,6 +178,13 @@ app.get('/', (req, res) => {
 });
 
 // -------------------------------------
+// ENDPOINT HEALTH (KEEP ALIVE / MONITORING)
+// -------------------------------------
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+// -------------------------------------
 // LANCEMENT SERVEUR
 // -------------------------------------
 const PORT = process.env.PORT || 3000;
