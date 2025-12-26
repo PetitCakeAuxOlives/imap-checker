@@ -3,14 +3,13 @@ const bodyParser = require('body-parser');
 const imaps = require('imap-simple');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
-const axios = require('axios'); // <-- obligatoire pour proxy N8N
+const axios = require('axios');
 
-// -------------------------------------
-// CONFIG SERVEUR + CORS RENDER FIX
-// -------------------------------------
 const app = express();
 
-// CORS spécial Render / Preflight OPTIONS obligatoire
+/* -------------------------------------------------
+   CORS (Render + Frontend + N8N)
+------------------------------------------------- */
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -19,16 +18,22 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
-
   next();
 });
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// -------------------------------------
-// PROXY N8N (IMPORTANT : FRONTEND -> RENDER -> N8N)
-// -------------------------------------
+/* -------------------------------------------------
+   HEALTH CHECK (UptimeRobot / Render)
+------------------------------------------------- */
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+/* -------------------------------------------------
+   PROXY N8N (OAuth handlers)
+------------------------------------------------- */
 app.post('/proxy-n8n', async (req, res) => {
   try {
     const response = await axios.post(
@@ -36,19 +41,19 @@ app.post('/proxy-n8n', async (req, res) => {
       req.body,
       { timeout: 15000 }
     );
-
     res.json(response.data);
   } catch (err) {
     res.status(500).json({
       success: false,
       error: err.message,
+      action: req.body?.action || 'proxy-n8n-error',
     });
   }
 });
 
-// -------------------------------------
-// FONCTION : TEST IMAP
-// -------------------------------------
+/* -------------------------------------------------
+   IMAP TEST
+------------------------------------------------- */
 async function testIMAP({ imap_host, imap_port, imap_user, imap_password }) {
   const config = {
     imap: {
@@ -70,9 +75,9 @@ async function testIMAP({ imap_host, imap_port, imap_user, imap_password }) {
   }
 }
 
-// -------------------------------------
-// FONCTION : TEST SMTP
-// -------------------------------------
+/* -------------------------------------------------
+   SMTP TEST
+------------------------------------------------- */
 async function testSMTP({ smtp_host, smtp_port, imap_user, imap_password }) {
   const transporter = nodemailer.createTransport({
     host: smtp_host,
@@ -90,10 +95,32 @@ async function testSMTP({ smtp_host, smtp_port, imap_user, imap_password }) {
   }
 }
 
-// -------------------------------------
-// ENDPOINT 1 : /test-imap-smtp
-// -------------------------------------
-app.post('/test-imap-smtp', async (req, res) => {
+/* -------------------------------------------------
+   MAIN ENDPOINT (N8N + FRONTEND)
+------------------------------------------------- */
+app.post('/check', async (req, res) => {
+  // 🔥 ACTION PAR DÉFAUT (clé pour ton Switch)
+  const action = req.body.action || 'configure-imap';
+
+  /* ---------------- OAuth Google ---------------- */
+  if (action === 'oauth-google-init') {
+    return res.json({
+      action,
+      success: true,
+      message: 'OAuth Google init',
+    });
+  }
+
+  /* ---------------- OAuth Microsoft ---------------- */
+  if (action === 'oauth-microsoft-init') {
+    return res.json({
+      action,
+      success: true,
+      message: 'OAuth Microsoft init',
+    });
+  }
+
+  /* ---------------- IMAP / SMTP ---------------- */
   const {
     imap_host,
     imap_port,
@@ -105,6 +132,7 @@ app.post('/test-imap-smtp', async (req, res) => {
 
   if (!imap_host || !imap_user || !imap_password) {
     return res.status(400).json({
+      action,
       success: false,
       error: 'Missing required IMAP/SMTP parameters',
     });
@@ -124,69 +152,29 @@ app.post('/test-imap-smtp', async (req, res) => {
     imap_password,
   });
 
-  const all_good = imapResult.success && smtpResult.success;
+  const allGood = imapResult.success && smtpResult.success;
 
   return res.json({
-    success: all_good,
+    action, // ⚠️ INDISPENSABLE POUR N8N
+    success: allGood,
     imap: imapResult,
     smtp: smtpResult,
-    message: all_good
+    message: allGood
       ? 'IMAP et SMTP fonctionnent ✔️'
       : 'Erreur de connexion IMAP ou SMTP ❌',
   });
 });
 
-// -------------------------------------
-// ENDPOINT 2 : /check (pour N8N)
-// -------------------------------------
-app.post('/check', async (req, res) => {
-  const {
-    imap_host,
-    imap_port,
-    smtp_host,
-    smtp_port,
-    imap_user,
-    imap_password,
-  } = req.body;
-
-  const imapResult = await testIMAP({
-    imap_host,
-    imap_port,
-    imap_user,
-    imap_password,
-  });
-
-  const smtpResult = await testSMTP({
-    smtp_host,
-    smtp_port,
-    imap_user,
-    imap_password,
-  });
-
-  return res.json({
-    success: imapResult.success && smtpResult.success,
-    imap: imapResult,
-    smtp: smtpResult,
-  });
-});
-
-// -------------------------------------
-// ENDPOINT DE TEST
-// -------------------------------------
+/* -------------------------------------------------
+   ROOT
+------------------------------------------------- */
 app.get('/', (req, res) => {
   res.send('API opérationnelle 🚀');
 });
 
-// -------------------------------------
-// ENDPOINT HEALTH (KEEP ALIVE / MONITORING)
-// -------------------------------------
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
-
-// -------------------------------------
-// LANCEMENT SERVEUR
-// -------------------------------------
+/* -------------------------------------------------
+   SERVER START
+------------------------------------------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log('🚀 Serveur lancé sur le port ' + PORT);
